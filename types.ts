@@ -94,6 +94,7 @@ export interface InspectorProps {
 // A System handles logic updates (e.g., Physics, Animation)
 export interface IGameSystem {
     id: string;
+    order?: number; // Added order property for system execution sorting
     init?: (ctx: ModuleContext) => void;
     update?: (dt: number, ctx: ModuleContext) => void;
     render?: (gl: WebGL2RenderingContext, viewProj: Float32Array, ctx: ModuleContext) => void;

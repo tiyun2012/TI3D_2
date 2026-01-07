@@ -1,4 +1,5 @@
-import { StaticMeshAsset, SkeletalMeshAsset, MaterialAsset, PhysicsMaterialAsset, ScriptAsset, RigAsset, TextureAsset, GraphNode, GraphConnection, Asset, LogicalMesh, FolderAsset } from '../types';
+
+import { StaticMeshAsset, SkeletalMeshAsset, MaterialAsset, PhysicsMaterialAsset, ScriptAsset, RigAsset, TextureAsset, GraphNode, GraphConnection, Asset, LogicalMesh, FolderAsset, BoneData } from '../types';
 import { MaterialTemplate, MATERIAL_TEMPLATES } from './MaterialTemplates';
 import { MESH_TYPES } from './constants';
 import { engineInstance } from './engine';
@@ -303,6 +304,54 @@ class AssetManagerService {
         this.registerAsset(asset);
         eventBus.emit('ASSET_CREATED', { id: asset.id, type: 'RIG' });
         return asset;
+    }
+
+    createSkeleton(name: string, path: string = '/Content/Skeletons'): SkeletalMeshAsset {
+        const id = crypto.randomUUID();
+
+        const identityMatrix = new Float32Array([
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1
+        ]);
+
+        const rootBone: BoneData = {
+            name: 'Root',
+            parentIndex: -1,
+            bindPose: new Float32Array(identityMatrix),
+            inverseBindPose: new Float32Array(identityMatrix),
+            visual: {
+                shape: 'Sphere',
+                size: 0.2,
+                color: { x: 1, y: 1, z: 1 }
+            }
+        };
+
+        const newAsset: SkeletalMeshAsset = {
+            id,
+            name,
+            type: 'SKELETAL_MESH',
+            path,
+            isProtected: false,
+            skeleton: {
+                bones: [rootBone]
+            },
+            geometry: {
+                vertices: new Float32Array(0),
+                normals: new Float32Array(0),
+                uvs: new Float32Array(0),
+                colors: new Float32Array(0),
+                indices: new Uint16Array(0),
+                jointIndices: new Float32Array(0),
+                jointWeights: new Float32Array(0)
+            },
+            animations: []
+        };
+
+        this.registerAsset(newAsset);
+        eventBus.emit('ASSET_CREATED', { id: newAsset.id, type: 'SKELETAL_MESH' });
+        return newAsset;
     }
 
     async importFile(fileName: string, content: string | ArrayBuffer, type: 'MESH' | 'SKELETAL_MESH', importScale: number = 1.0, detectQuads: boolean = true): Promise<Asset> {

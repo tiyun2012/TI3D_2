@@ -1,4 +1,3 @@
-
 // services/SceneGraph.ts
 
 import { Mat4Utils } from './math';
@@ -104,10 +103,12 @@ export class SceneGraph {
     
     if (idx === undefined || idx === -1) idx = this.ecs.idToIndex.get(entityId);
     
+    // Mark the target first so parent changes immediately flag the node itself.
     if (idx !== undefined && idx !== -1) {
         this.ecs.store.transformDirty[idx] = 1;
     }
 
+    // Propagate to descendants so children get updated even without direct edits.
     const stack = [entityId];
     while(stack.length > 0) {
         const currId = stack.pop()!;
@@ -139,9 +140,26 @@ export class SceneGraph {
     if (idx === undefined || idx === -1) return null;
     const store = this.ecs.store;
 
-    if (store.transformDirty[idx]) {
-        const parentMat = (node && node.parentId) ? this.getWorldMatrix(node.parentId) : null;
-        store.updateWorldMatrix(idx, parentMat);
+    // Build parent chain iteratively to avoid recursion on deep hierarchies.
+    const chain: number[] = [];
+    let currentId: string | null = entityId;
+    while (currentId) {
+        const currentNode = this.nodes.get(currentId);
+        const currentIdx = currentNode ? currentNode.index : this.ecs.idToIndex.get(currentId);
+        if (currentIdx === undefined || currentIdx === -1) break;
+        chain.push(currentIdx);
+        currentId = currentNode?.parentId ?? null;
+    }
+
+    // Update from root -> leaf so dirty parents are resolved before children.
+    let parentMat: Float32Array | null = null;
+    for (let i = chain.length - 1; i >= 0; i--) {
+        const chainIdx = chain[i];
+        if (store.transformDirty[chainIdx]) {
+            store.updateWorldMatrix(chainIdx, parentMat);
+        }
+        const start = chainIdx * 16;
+        parentMat = store.worldMatrix.subarray(start, start + 16);
     }
 
     const start = idx * 16;
@@ -171,6 +189,7 @@ export class SceneGraph {
         
         if (idx === -1) continue;
 
+        // Parent dirty implies child update even when the child isn't marked dirty.
         const isDirty = store.transformDirty[idx] === 1 || pDirty;
         if (isDirty) {
             store.updateWorldMatrix(idx, mat);

@@ -11,7 +11,6 @@ import { NodeGraph } from './NodeGraph';
 import { ImportWizard } from './ImportWizard';
 import { consoleService } from '../services/Console';
 import { Asset, AssetType } from '../types';
-import { skeletonSystem } from '../services/systems/SkeletonSystem';
 import { skeletonTool } from '../services/tools/SkeletonTool';
 type ViewMode = 'GRID' | 'LIST';
 
@@ -263,15 +262,15 @@ export const ProjectPanel: React.FC = () => {
             case 'SCRIPT': assetManager.createScript(name, currentPath); break;
             case 'RIG': assetManager.createRig(name, templateIndex !== undefined ? RIG_TEMPLATES[templateIndex] : undefined, currentPath); break;
             case 'PHYSICS_MATERIAL': assetManager.createPhysicsMaterial(name, undefined, currentPath); break;
-            case 'SKELETAL_MESH': skeletonSystem.createNewSkeleton(name, currentPath); break;
+            case 'SKELETAL_MESH': assetManager.createSkeleton(name, currentPath); break;
         }
         setRefresh(r => r + 1);
     };
     const handleCreateSkeleton = () => {
-        const newId = skeletonSystem.createNewSkeleton('New_Skeleton', currentPath);
+        const asset = assetManager.createSkeleton('New_Skeleton', currentPath);
         setRefresh(r => r + 1);
-        setSelectedAssetIds([newId]);
-        skeletonTool.setActiveAsset(newId);
+        setSelectedAssetIds([asset.id]);
+        skeletonTool.setActiveAsset(asset.id);
     };
 
     const handleOpenAsset = (asset: Asset) => {
