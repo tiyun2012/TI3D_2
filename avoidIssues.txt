@@ -1,0 +1,59 @@
+# Avoid Issue Cache & Best Practices
+# Use this file to context-load the AI before refactoring to prevent regressions.
+
+---
+
+### 1. GENERAL / ARCHITECTURE
+- **PRESERVE FEATURES:** Never remove existing functionality during optimization. If replacing a loop or system, ensure the new implementation covers all previous use cases (e.g., selection highlighting, grid toggling).
+- **SOURCE OF TRUTH:** The `engineInstance` (ECS + SceneGraph) is the source of truth. React components (`SceneView`, `Inspector`) should sync *from* the engine, not drive it directly.
+- **TYPESCRIPT STRICTNESS:** Respect strict type boundaries. Do not pass `Float32Array` where `ArrayBuffer` is expected without proper casting or union types in helper signatures.
+
+---
+
+### 2. NODE GRAPH (`components/NodeGraph.tsx`)
+- **AVOID RELATIVE UNITS:** Do NOT use CSS classes (e.g., `h-9`, `p-2`, `rem`) for node headers or ports.
+  - **Reason:** DOM element sizes must exactly match the `GraphMath` constants used to draw SVG wires.
+  - **Solution:** Use explicit pixel values in `style={{ height: HEADER_HEIGHT, ... }}`.
+- **PERFORMANCE:** Avoid `array.find()` in render loops or drag handlers. Use `Map<string, Node>` for O(1) lookups.
+- **ACCESSIBILITY:** All inputs (`<input>`) and interactive elements must have `aria-label` or `title`. Missing these causes Severity 8 build failures.
+- **DEBOUNCING:** Debounce the `compileGraph` call. Do not run heavy graph logic on every `mousemove` event.
+
+---
+
+### 3. RENDERER (`services/renderers/WebGLRenderer.ts`)
+- **VIEWPORT SYNC:** Always check and set `gl.viewport` at the start of the `render()` frame. Do not rely solely on a `resize` event listener, as it may miss the initial layout pass.
+- **BUFFER BINDING:** Explicitly `bindBuffer` immediately before calling `vertexAttribPointer`. Do not assume the buffer is still bound from previous operations.
+- **TEXTURE SAFETY:** When using `sampler2DArray` (WebGL2), you MUST explicitly set `TEXTURE_WRAP_S` and `TEXTURE_WRAP_T`. Failing to do so causes black textures on some drivers.
+- **CULLING RISKS:** Be cautious with `gl.enable(gl.CULL_FACE)`. If geometry disappears, disable culling first to rule out winding order mismatches.
+- **BUFFER ORPHANING:** When updating instance data, call `gl.bufferData(..., gl.DYNAMIC_DRAW)` to orphan the buffer before `gl.bufferSubData`. This prevents GPU pipeline stalls.
+
+---
+
+### 4. SCENE VIEW & CAMERA (`components/SceneView.tsx`)
+- **3D PANNING:** Do not use 2D screen X/Y offsets for camera panning.
+  - **Solution:** Calculate the camera's local "Right" and "Up" vectors and apply movement along those vectors to ensure panning follows the camera's orientation.
+- **LINTER COMPLIANCE:** Ensure all toolbar buttons (Icons) have `title` and `aria-label` attributes.
+
+---
+
+### 5. SCENE GRAPH (`services/SceneGraph.ts`)
+- **ITERATION OVER RECURSION:** Avoid recursive functions for `updateWorldMatrix` or `setDirty`. Use a stack-based `while` loop to prevent stack overflow crashes in deep hierarchies (100+ entities).
+
+---
+
+### 6. COMMENT & LOST FEATURES
+- **PRESERVATION:** Keep all comments during refactoring to aid understanding. Ensure no features are lost when optimizing code.
+
+---
+
+### 7. UI & COMPONENTS
+- **ACCESSIBILITY (BLOCKING):** Every interactive element (`button`, `input`, `select`, `range`) MUST have a `title` and `aria-label`. The linter treats missing labels as Severity 8 (Build Fail).
+- **INLINE STYLES (WARNINGS):** Ignore "no-inline-styles" warnings (Severity 4) for dynamic components like `DraggableWindow`, `NodeGraph`, and `Gizmo`. These require runtime calculation of coordinates and cannot be moved to static CSS.
+- **ICONS:** Verify icon names against the `lucide-react` library. Do not use non-existent names (e.g., use `Cuboid` instead of `Scene`).
+
+---
+
+### 8. BUILD & CONFIGURATION
+- **STRICT MODE:** `tsconfig.json` must have `"strict": true` and `"forceConsistentCasingInFileNames": true` to pass validation.
+- **TYPE DEFINITIONS:** Ensure `@types/react` and `@types/react-dom` are installed. Do NOT restrict `"types": ["node"]` in `tsconfig.json` as it breaks React type resolution.
+- **CSS COMPATIBILITY:** Always include vendor prefixes for newer CSS features (e.g., `-webkit-backdrop-filter` alongside `backdrop-filter`) to support Safari/iOS.

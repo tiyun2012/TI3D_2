@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Ti3D Engine Editor",
+  "description": "A high-performance ECS game engine editor with Unity-style UI and Unreal-style node blueprints, editor for model, rigging realtime",
+  "requestFramePermissions": []
+}
