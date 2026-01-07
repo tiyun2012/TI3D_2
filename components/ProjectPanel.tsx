@@ -54,16 +54,6 @@ const FolderTreeItem: React.FC<{
     const myAsset = useMemo(() => {
         if (isRoot) return null; // Virtual root
         // Find folder asset matching this path/name
-        // Note: For 'Content' (path="", name="Content"), path is empty string in logic
-        const p = path === '' ? '/' : path; 
-        // Special case: Initial call is path="" name="Content". The asset path for Content folder is "/"
-        // Wait, AssetManager registers Root folders with path '/'.
-        // Let's rely on finding an asset where a.path == path (or '/') and a.name == name.
-        
-        // Actually, for subfolders:
-        // Parent: "/Content", Name: "Materials" -> Asset Path: "/Content", Asset Name: "Materials"
-        // For Root "Content": Passed path="", Name="Content". Asset Path="/", Asset Name="Content"
-        
         const searchPath = path === '' ? '/' : path;
         return allAssets.find(a => a.type === 'FOLDER' && a.name === name && a.path === searchPath);
     }, [allAssets, path, name, isRoot]);
@@ -273,6 +263,7 @@ export const ProjectPanel: React.FC = () => {
             case 'SCRIPT': assetManager.createScript(name, currentPath); break;
             case 'RIG': assetManager.createRig(name, templateIndex !== undefined ? RIG_TEMPLATES[templateIndex] : undefined, currentPath); break;
             case 'PHYSICS_MATERIAL': assetManager.createPhysicsMaterial(name, undefined, currentPath); break;
+            case 'SKELETAL_MESH': skeletonSystem.createNewSkeleton(name, currentPath); break;
         }
         setRefresh(r => r + 1);
     };
@@ -455,7 +446,7 @@ export const ProjectPanel: React.FC = () => {
                 {/* Filters */}
                 <div className="h-8 bg-panel border-b border-black/10 flex items-center gap-1 px-2 overflow-x-auto custom-scrollbar shrink-0">
                     <button onClick={() => setFilterType('ALL')} className={`px-2 py-0.5 text-[10px] rounded-sm transition-colors border ${filterType === 'ALL' ? 'bg-white/10 border-white/20 text-white' : 'border-transparent text-text-secondary hover:bg-white/5'}`}>All</button>
-                    {['MATERIAL', 'MESH', 'TEXTURE', 'SCRIPT', 'RIG', 'PHYSICS_MATERIAL'].map(t => (
+                    {['MATERIAL', 'MESH', 'SKELETAL_MESH', 'TEXTURE', 'SCRIPT', 'RIG', 'PHYSICS_MATERIAL'].map(t => (
                         <button key={t} onClick={() => setFilterType(t as AssetType)} className={`px-2 py-0.5 text-[10px] rounded-sm transition-colors border flex items-center gap-1 ${filterType === t ? 'bg-white/10 border-white/20 text-white' : 'border-transparent text-text-secondary hover:bg-white/5'}`}>
                             <div className={`w-1.5 h-1.5 rounded-full ${getTypeColor(t as AssetType).replace('bg-', 'bg-')}`}></div>
                             {t.replace('_', ' ')}
@@ -559,6 +550,7 @@ export const ProjectPanel: React.FC = () => {
                             <div className="px-3 py-1.5 hover:bg-accent hover:text-white cursor-pointer" onClick={() => { handleCreateAsset('SCRIPT'); setContextMenu(null); }}>Script</div>
                             <div className="px-3 py-1.5 hover:bg-accent hover:text-white cursor-pointer" onClick={() => { handleCreateAsset('RIG'); setContextMenu(null); }}>Rig</div>
                             <div className="px-3 py-1.5 hover:bg-accent hover:text-white cursor-pointer" onClick={() => { handleCreateAsset('PHYSICS_MATERIAL'); setContextMenu(null); }}>Physics Material</div>
+                            <div className="px-3 py-1.5 hover:bg-accent hover:text-white cursor-pointer" onClick={() => { handleCreateAsset('SKELETAL_MESH'); setContextMenu(null); }}>Skeleton</div>
                         </>
                     )}
 
