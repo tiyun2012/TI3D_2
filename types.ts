@@ -208,6 +208,9 @@ export interface LogicalMesh {
     // Connectivity maps for fast lookups
     vertexToFaces: Map<number, number[]>;
     
+    // Coincident vertices (same position, different normal/uv) used for topological traversal across hard edges
+    siblings?: Map<number, number[]>; 
+
     // Advanced Topology Graph (Lazy loaded or computed on import)
     graph?: MeshTopology;
     

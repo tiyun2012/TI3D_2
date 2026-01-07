@@ -422,27 +422,76 @@ export const MeshTopologyUtils = {
     _walkEdgeLoop: (mesh: LogicalMesh, fromV: number, currV: number): [number, number][] => {
         const loop: [number, number][] = [];
         let prev = fromV; let current = currV;
+        
+        // Helper to check if a vertex matches or is a sibling of target
+        const isSame = (a: number, b: number) => {
+            if (a === b) return true;
+            if (mesh.siblings) {
+                const sibs = mesh.siblings.get(a);
+                return sibs ? sibs.includes(b) : false;
+            }
+            return false;
+        };
+
+        // Helper to check if a face includes a vertex (or its siblings)
+        const faceHasVertex = (fIdx: number, v: number) => {
+            const face = mesh.faces[fIdx];
+            if (face.includes(v)) return true;
+            if (mesh.siblings) {
+                const sibs = mesh.siblings.get(v);
+                if (sibs) return face.some(fv => sibs.includes(fv));
+            }
+            return false;
+        };
+
         let iter = 0;
         while(iter++ < 1000) {
             const neighborFaces = mesh.vertexToFaces.get(current) || [];
+            
+            // Get neighbors from connected faces
             const neighbors = new Set<number>();
             neighborFaces.forEach(fIdx => {
                 const face = mesh.faces[fIdx];
-                const idx = face.indexOf(current);
-                neighbors.add(face[(idx + 1) % face.length]);
-                neighbors.add(face[(idx + face.length - 1) % face.length]);
+                // Note: v2f is populated with welded siblings logic in AssetManager,
+                // so neighborFaces includes faces touching any sibling of 'current'.
+                // But the face array itself contains specific indices.
+                
+                // Find where 'current' or its sibling is in the face
+                let idx = face.indexOf(current);
+                if (idx === -1 && mesh.siblings && mesh.siblings.has(current)) {
+                    const sibs = mesh.siblings.get(current)!;
+                    idx = face.findIndex(fv => sibs.includes(fv));
+                }
+
+                if (idx !== -1) {
+                    neighbors.add(face[(idx + 1) % face.length]);
+                    neighbors.add(face[(idx + face.length - 1) % face.length]);
+                }
             });
-            const incomingFaces = neighborFaces.filter(fIdx => mesh.faces[fIdx].includes(prev));
+
+            // Find faces shared with 'prev'
+            const incomingFaces = neighborFaces.filter(fIdx => faceHasVertex(fIdx, prev));
+            
             let nextVertex = -1;
             for (const n of Array.from(neighbors)) {
-                if (n === prev) continue;
-                const outgoingFaces = neighborFaces.filter(fIdx => mesh.faces[fIdx].includes(n));
+                if (isSame(n, prev)) continue;
+                
+                // Check if edge (current -> n) shares a face with edge (prev -> current)
+                // If they share a face, they are not "across" from each other in a quad grid sense.
+                // An edge loop typically crosses edges that do NOT share a face.
+                
+                const outgoingFaces = neighborFaces.filter(fIdx => faceHasVertex(fIdx, n));
                 const shared = incomingFaces.filter(f => outgoingFaces.includes(f));
+                
+                // If shared length is 0, it means 'n' is connected to 'current', 
+                // but the edge (current-n) is not part of the same face as (prev-current).
+                // This implies 'n' is "straight across" the vertex.
                 if (shared.length === 0) {
                     nextVertex = n;
                     break; 
                 }
             }
+
             if (nextVertex !== -1) {
                 loop.push([current, nextVertex]);
                 prev = current; current = nextVertex;

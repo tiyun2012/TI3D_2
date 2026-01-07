@@ -291,7 +291,15 @@ export class SelectionSystem {
             if (edges.length === 0) return;
             const lastEdge = edges[edges.length - 1];
             const [v1, v2] = lastEdge.split('-').map(Number);
+            
             const loop = MeshTopologyUtils.getEdgeLoop(topo, v1, v2);
+            
+            if (loop.length === 0) {
+                consoleService.warn("No loop found. Mesh topology might be disconnected at UVs/Normals.", "SelectionSystem");
+            } else {
+                consoleService.success(`Selected Edge Loop (${loop.length} edges)`, "SelectionSystem");
+            }
+
             loop.forEach(e => {
                 const key = e.sort((a,b)=>a-b).join('-');
                 this.subSelection.edgeIds.add(key);
@@ -300,23 +308,27 @@ export class SelectionSystem {
         else if (mode === 'VERTEX') {
             const verts = Array.from(this.subSelection.vertexIds);
             if (verts.length < 2) {
-                consoleService.warn('Select at least 2 vertices to define loop direction');
+                consoleService.warn('Select at least 2 vertices to define loop direction', "SelectionSystem");
                 return;
             }
+            // Sort by insertion order is not guaranteed in Set but usually stable. 
+            // Better to assume user clicked last two.
             const v1 = verts[verts.length - 2];
             const v2 = verts[verts.length - 1];
             const key = [v1, v2].sort((a,b)=>a-b).join('-');
+            
             if (topo.graph && topo.graph.edgeKeyToHalfEdge.has(key)) {
                 const loop = MeshTopologyUtils.getVertexLoop(topo, v1, v2);
                 loop.forEach(v => this.subSelection.vertexIds.add(v));
+                consoleService.success(`Selected Vertex Loop`, "SelectionSystem");
             } else {
-                consoleService.warn('Selected vertices are not connected');
+                consoleService.warn('Selected vertices are not connected', "SelectionSystem");
             }
         } 
         else if (mode === 'FACE') {
             const faces = Array.from(this.subSelection.faceIds);
             if (faces.length < 2) {
-                consoleService.warn('Select at least 2 adjacent faces to define loop direction');
+                consoleService.warn('Select at least 2 adjacent faces to define loop direction', "SelectionSystem");
                 return;
             }
             const f1 = faces[faces.length - 2];
@@ -326,11 +338,12 @@ export class SelectionSystem {
             const verts2 = topo.faces[f2];
             const shared = verts1.filter(v => verts2.includes(v));
             
-            if (shared.length === 2) {
+            if (shared.length >= 2) { // 2 shared vertices = shared edge
                 const loop = MeshTopologyUtils.getFaceLoop(topo, shared[0], shared[1]);
                 loop.forEach(f => this.subSelection.faceIds.add(f));
+                consoleService.success(`Selected Face Loop`, "SelectionSystem");
             } else {
-                consoleService.warn('Faces are not adjacent');
+                consoleService.warn('Faces are not adjacent', "SelectionSystem");
             }
         }
         

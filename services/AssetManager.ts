@@ -97,6 +97,36 @@ class AssetManagerService {
         };
     }
 
+    // Helper to identify coincident vertices
+    private computeSiblings(vertices: Float32Array | number[]): Map<number, number[]> {
+        const siblings = new Map<number, number[]>();
+        const posMap = new Map<string, number[]>();
+        
+        const v = vertices instanceof Float32Array ? vertices : new Float32Array(vertices);
+        const count = v.length / 3;
+
+        for(let i=0; i<count; i++) {
+            // Quantize to merge close vertices
+            const x = Math.round(v[i*3] * 10000);
+            const y = Math.round(v[i*3+1] * 10000);
+            const z = Math.round(v[i*3+2] * 10000);
+            const key = `${x},${y},${z}`;
+            
+            if(!posMap.has(key)) posMap.set(key, []);
+            posMap.get(key)!.push(i);
+        }
+
+        posMap.forEach(group => {
+            if (group.length > 1) {
+                group.forEach(idx => {
+                    siblings.set(idx, group);
+                });
+            }
+        });
+        
+        return siblings;
+    }
+
     private createDefaultPhysicsMaterials() {
         this.createPhysicsMaterial('Concrete', { staticFriction: 0.8, dynamicFriction: 0.7, bounciness: 0.1, density: 2.4 });
         this.createPhysicsMaterial('Rubber', { staticFriction: 0.9, dynamicFriction: 0.8, bounciness: 0.8, density: 1.1 });
@@ -421,11 +451,22 @@ class AssetManagerService {
         }
 
         const v2f = new Map<number, number[]>();
+        const siblings = this.computeSiblings(geometryData.v);
+
         if (geometryData.faces) {
             geometryData.faces.forEach((f: number[], i: number) => {
                 f.forEach(vIdx => {
+                    // Populate v2f for this vertex
                     if(!v2f.has(vIdx)) v2f.set(vIdx, []);
-                    v2f.get(vIdx)!.push(i);
+                    if(!v2f.get(vIdx)!.includes(i)) v2f.get(vIdx)!.push(i);
+
+                    // Propagate to siblings (Spatial Welding for connectivity)
+                    if (siblings.has(vIdx)) {
+                        siblings.get(vIdx)!.forEach(sib => {
+                            if(!v2f.has(sib)) v2f.set(sib, []);
+                            if(!v2f.get(sib)!.includes(i)) v2f.get(sib)!.push(i);
+                        });
+                    }
                 });
             });
         }
@@ -433,7 +474,8 @@ class AssetManagerService {
         const topology: LogicalMesh = {
             faces: geometryData.faces || [],
             triangleToFaceIndex: new Int32Array(geometryData.triToFace || []),
-            vertexToFaces: v2f
+            vertexToFaces: v2f,
+            siblings // Store siblings map for edge walking
         };
         
         if (geometryData.v.length > 0) {
@@ -976,14 +1018,33 @@ private reconstructQuads(
     private createPrimitive(name: string, generator: () => any): StaticMeshAsset {
         const data = generator();
         const v2f = new Map<number, number[]>();
-        data.faces?.forEach((f: number[], i: number) => f.forEach(v => { if(!v2f.has(v)) v2f.set(v, []); v2f.get(v)!.push(i); }));
+        
+        // Compute siblings for hard-edge traversal support
+        const siblings = this.computeSiblings(data.v);
+
+        data.faces?.forEach((f: number[], i: number) => {
+            f.forEach(vIdx => {
+                if(!v2f.has(vIdx)) v2f.set(vIdx, []);
+                if(!v2f.get(vIdx)!.includes(i)) v2f.get(vIdx)!.push(i);
+                
+                // Propagate to siblings
+                if (siblings.has(vIdx)) {
+                    siblings.get(vIdx)!.forEach(sib => {
+                        if(!v2f.has(sib)) v2f.set(sib, []);
+                        if(!v2f.get(sib)!.includes(i)) v2f.get(sib)!.push(i);
+                    });
+                }
+            });
+        });
+        
         const colors = new Float32Array(data.v.length).fill(1.0);
         const aabb = this.computeAABB(new Float32Array(data.v));
 
         const topology: LogicalMesh = { 
             faces: data.faces, 
             triangleToFaceIndex: new Int32Array(data.triToFace), 
-            vertexToFaces: v2f 
+            vertexToFaces: v2f,
+            siblings // Store siblings map
         };
         
         if (data.faces) topology.graph = MeshTopologyUtils.buildTopology(topology, data.v.length / 3);
