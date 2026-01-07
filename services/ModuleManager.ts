@@ -1,4 +1,3 @@
-
 import { EngineModule, ModuleContext, IGameSystem, ComponentType } from '../types';
 
 class ModuleManagerService {
@@ -26,6 +25,8 @@ class ModuleManagerService {
         this.modules.forEach(m => {
             this.initializeModule(m);
         });
+
+        this.sortActiveSystems();
     }
 
     private initializeModule(module: EngineModule) {
@@ -37,11 +38,26 @@ class ModuleManagerService {
         // System Init
         if (module.system) {
             if (module.system.init) module.system.init(this.context);
+            if (module.system.order === undefined) {
+                module.system.order = module.order;
+            }
             // Deduplicate systems
             if (!this.activeSystems.find(s => s.id === module.system!.id)) {
                 this.activeSystems.push(module.system);
+                this.sortActiveSystems();
             }
         }
+    }
+
+    // Ordering rule: systems run in ascending order (system.order or module.order),
+    // with system.id as a deterministic tie-breaker.
+    private sortActiveSystems() {
+        this.activeSystems.sort((a, b) => {
+            const orderA = a.order ?? 0;
+            const orderB = b.order ?? 0;
+            if (orderA !== orderB) return orderA - orderB;
+            return a.id.localeCompare(b.id);
+        });
     }
 
     register(module: EngineModule) {

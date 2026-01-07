@@ -102,9 +102,8 @@ export class Engine {
         // Expose to window for legacy/debug access
         (window as any).engineInstance = this;
 
-        // Register Modules first (this creates the Systems)
-        registerCoreModules(this.physicsSystem, this.particleSystem, this.animationSystem);
-        
+        // Register core modules in a deterministic order (see registerCoreModules).        
+            registerCoreModules(this.physicsSystem, this.particleSystem, this.animationSystem);
         moduleManager.init({
             engine: this,
             ecs: this.ecs,
