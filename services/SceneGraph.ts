@@ -1,6 +1,7 @@
+
 // services/SceneGraph.ts
 
-import { Mat4Utils } from './math';
+import { Mat4Utils, Vec3Utils, QuatUtils } from './math';
 import type { SoAEntitySystem } from './ecs/EntitySystem';
 
 export class SceneNode {
@@ -26,6 +27,15 @@ export class SceneGraph {
   private ecs: SoAEntitySystem | null = null;
   
   private updateStack: StackItem[] = [];
+  
+  // Temp vars for attachment calculation
+  private _tempWorld = Mat4Utils.create();
+  private _tempInvParent = Mat4Utils.create();
+  private _tempLocal = Mat4Utils.create();
+  private _tempPos = {x:0, y:0, z:0};
+  private _tempScale = {x:1, y:1, z:1};
+  private _tempQuat = {x:0, y:0, z:0, w:1};
+  private _tempEuler = {x:0, y:0, z:0};
 
   registerEntity(entityId: string) {
     if (!this.nodes.has(entityId)) {
@@ -69,8 +79,19 @@ export class SceneGraph {
 
   attach(childId: string, parentId: string | null) {
     const childNode = this.nodes.get(childId);
-    if (!childNode) return;
+    if (!childNode || !this.ecs) return;
 
+    // 1. Capture current World Transform before changing hierarchy
+    // This allows us to "Keep World Transform"
+    const currentWorld = this.getWorldMatrix(childId);
+    if (currentWorld) {
+        Mat4Utils.copy(this._tempWorld, currentWorld);
+    } else {
+        // If no world matrix yet, assume identity/current local is effectively world
+        Mat4Utils.identity(this._tempWorld); 
+    }
+
+    // 2. Perform Topology Update
     if (childNode.parentId) {
       const oldParent = this.nodes.get(childNode.parentId);
       if (oldParent) oldParent.childrenIds = oldParent.childrenIds.filter(id => id !== childId);
@@ -85,6 +106,7 @@ export class SceneGraph {
         newParent.childrenIds.push(childId);
         this.rootIds.delete(childId);
       } else {
+        // Fallback if parent not found
         childNode.parentId = null;
         this.rootIds.add(childId);
       }
@@ -92,6 +114,46 @@ export class SceneGraph {
       childNode.parentId = null;
       this.rootIds.add(childId);
     }
+
+    // 3. Compensate Transform (Keep World Position)
+    // NewLocal = Inv(NewParentWorld) * OldWorld
+    let newLocalMat = this._tempWorld; // Default to world if root
+
+    if (parentId) {
+        const newParentWorld = this.getWorldMatrix(parentId);
+        if (newParentWorld) {
+            if (Mat4Utils.invert(newParentWorld, this._tempInvParent)) {
+                Mat4Utils.multiply(this._tempInvParent, this._tempWorld, this._tempLocal);
+                newLocalMat = this._tempLocal;
+            }
+        }
+    }
+
+    // 4. Write new Local Transform to ECS
+    const idx = childNode.index;
+    if (idx !== -1) {
+        const store = this.ecs.store;
+        
+        // Decompose newLocalMat
+        Mat4Utils.getTranslation(newLocalMat, this._tempPos);
+        Mat4Utils.getScaling(newLocalMat, this._tempScale);
+        QuatUtils.fromMat4(newLocalMat, this._tempQuat);
+        QuatUtils.toEuler(this._tempQuat, this._tempEuler);
+
+        store.posX[idx] = this._tempPos.x;
+        store.posY[idx] = this._tempPos.y;
+        store.posZ[idx] = this._tempPos.z;
+
+        store.scaleX[idx] = this._tempScale.x;
+        store.scaleY[idx] = this._tempScale.y;
+        store.scaleZ[idx] = this._tempScale.z;
+
+        store.rotX[idx] = this._tempEuler.x;
+        store.rotY[idx] = this._tempEuler.y;
+        store.rotZ[idx] = this._tempEuler.z;
+    }
+
+    // 5. Mark dirty to propagate
     this.setDirty(childId);
   }
 
