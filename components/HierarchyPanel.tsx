@@ -172,17 +172,7 @@ export const HierarchyPanel: React.FC<HierarchyPanelProps> = ({ entities, sceneG
         </button>
       </div>
 
-      <div
-        className="flex-1 overflow-y-auto py-2 custom-scrollbar"
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-            e.preventDefault();
-            const childId = e.dataTransfer.getData('text/plain');
-            if (!childId) return;
-            sceneGraph.attach(childId, null);
-            engineInstance.notifyUI();
-        }}
-      >
+      <div className="flex-1 overflow-y-auto py-2 custom-scrollbar">
         <div 
             className="flex items-center gap-2 text-xs text-text-primary px-3 py-1 font-semibold opacity-70 cursor-default"
             onClick={() => onSelect([])}
