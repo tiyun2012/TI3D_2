@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState, useLayoutEffect, useContext, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Entity, ToolType, MeshComponentMode } from '../types';
@@ -37,7 +36,9 @@ export const SceneView: React.FC<SceneViewProps> = ({ entities, sceneGraph, onSe
     } = useContext(EditorContext)!;
     
     // --- HOOKS ---
-    const { isAdjustingBrush, isBrushKeyHeld } = useBrushInteraction();
+    const { isAdjustingBrush, isBrushKeyHeld } = useBrushInteraction({
+        onBrushAdjustEnd: () => engineInstance.endVertexDrag()
+    });
     
     // State for local view settings
     const [renderMode, setRenderMode] = useState(0);

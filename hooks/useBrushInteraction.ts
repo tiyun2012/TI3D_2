@@ -1,8 +1,12 @@
-
 import { useEffect, useRef, useState, useContext } from 'react';
 import { EditorContext } from '../contexts/EditorContext';
 
-export const useBrushInteraction = () => {
+interface BrushInteractionOptions {
+    onBrushAdjustStart?: () => void;
+    onBrushAdjustEnd?: () => void;
+}
+
+export const useBrushInteraction = (options: BrushInteractionOptions = {}) => {
     const ctx = useContext(EditorContext);
     
     // Safety check for context usage
@@ -57,7 +61,12 @@ export const useBrushInteraction = () => {
             }
         };
 
-        const handleGlobalMouseUp = () => setIsAdjustingBrush(false);
+        const handleGlobalMouseUp = () => {
+            if (isAdjustingBrush) {
+                setIsAdjustingBrush(false);
+                options.onBrushAdjustEnd?.();
+            }
+        };
 
         const onWindowMouseDown = (e: MouseEvent) => {
             if (bKeyRef.current && e.button === 0) {
@@ -72,6 +81,7 @@ export const useBrushInteraction = () => {
                 if (!softSelectionEnabled) setSoftSelectionEnabled(true);
                 
                 setIsAdjustingBrush(true);
+                options.onBrushAdjustStart?.();
                 brushStartPos.current = { x: e.clientX, y: e.clientY, startRadius: softSelectionRadius };
             }
         };

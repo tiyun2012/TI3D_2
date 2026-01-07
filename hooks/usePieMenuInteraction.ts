@@ -32,6 +32,10 @@ export const usePieMenuInteraction = ({
 
     const handlePieAction = useCallback((action: string) => {
         const handleLoopSelect = (mode: MeshComponentMode) => {
+            const subSelection = engineInstance.selectionSystem.subSelection;
+            if (mode === 'VERTEX' && subSelection.vertexIds.size < 2) return;
+            if (mode === 'EDGE' && subSelection.edgeIds.size < 1) return;
+            if (mode === 'FACE' && subSelection.faceIds.size < 2) return;
             setMeshComponentMode(mode);
             engineInstance.meshComponentMode = mode;
             engineInstance.selectLoop(mode);

@@ -1,4 +1,3 @@
-
 // services/engine.ts
 
 import { SoAEntitySystem } from './ecs/EntitySystem';
@@ -209,6 +208,38 @@ export class Engine {
             // 3. Re-upload to GPU
             this.registerAssetWithGPU(asset);
         }
+    }
+
+    /**
+     * Call this after modifying mesh vertices to update GPU buffers.
+     * This avoids emitting ASSET_UPDATED to prevent mid-drag cache resets.
+     */
+    notifyMeshGeometryChanged(entityId: string) {
+        const idx = this.ecs.idToIndex.get(entityId);
+        if (idx === undefined) return;
+        const meshIntId = this.ecs.store.meshType[idx];
+        const assetUuid = assetManager.meshIntToUuid.get(meshIntId);
+        if (!assetUuid) return;
+        const asset = assetManager.getAsset(assetUuid) as StaticMeshAsset;
+        if (!asset || !asset.geometry) return;
+
+        this.updateMeshBounds(asset);
+        this.registerAssetWithGPU(asset);
+    }
+
+    /**
+     * Call this after finishing a geometry edit (e.g. mouse up) to notify listeners once.
+     */
+    notifyMeshGeometryFinalized(entityId: string) {
+        const idx = this.ecs.idToIndex.get(entityId);
+        if (idx === undefined) return;
+        const meshIntId = this.ecs.store.meshType[idx];
+        const assetUuid = assetManager.meshIntToUuid.get(meshIntId);
+        if (!assetUuid) return;
+        const asset = assetManager.getAsset(assetUuid) as StaticMeshAsset;
+        if (!asset || !asset.geometry) return;
+
+        eventBus.emit('ASSET_UPDATED', { id: asset.id, type: asset.type });
     }
 
     initGL(canvas: HTMLCanvasElement) {
@@ -842,8 +873,7 @@ export class Engine {
             }
         }
         
-        this.updateMeshBounds(asset);
-        this.registerAssetWithGPU(asset);
+        this.notifyMeshGeometryChanged(entityId);
     }
 
     private applyDeformation(entityId: string) {
@@ -883,8 +913,7 @@ export class Engine {
             }
         }
 
-        this.updateMeshBounds(asset);
-        this.registerAssetWithGPU(asset);
+        this.notifyMeshGeometryChanged(entityId);
     }
 
     private updateMeshBounds(asset: StaticMeshAsset) {
@@ -910,6 +939,9 @@ export class Engine {
     }
 
     endVertexDrag() {
+        if (this.activeDeformationEntity) {
+            this.notifyMeshGeometryFinalized(this.activeDeformationEntity);
+        }
     }
 
     clearDeformation() {
