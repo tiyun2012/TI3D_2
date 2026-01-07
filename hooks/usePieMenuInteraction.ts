@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { engineInstance } from '../services/engine';
 import { SceneGraph } from '../services/SceneGraph';
@@ -32,6 +31,12 @@ export const usePieMenuInteraction = ({
     const closePieMenu = useCallback(() => setPieMenuState(null), []);
 
     const handlePieAction = useCallback((action: string) => {
+        const handleLoopSelect = (mode: MeshComponentMode) => {
+            setMeshComponentMode(mode);
+            engineInstance.meshComponentMode = mode;
+            engineInstance.selectLoop(mode);
+        };
+
         // Tools
         if (action === 'tool_select') setTool('SELECT');
         if (action === 'tool_move') setTool('MOVE');
@@ -61,12 +66,12 @@ export const usePieMenuInteraction = ({
         if (action === 'delete_face') engineInstance.deleteSelectedFaces();
 
         // --- PROTECTED SELECTION LOOPS ---
-        if (action === 'loop_vert') engineInstance.selectionSystem.selectLoop('VERTEX');
-        if (action === 'loop_edge') engineInstance.selectionSystem.selectLoop('EDGE');
-        if (action === 'loop_face') engineInstance.selectionSystem.selectLoop('FACE');
+        if (action === 'loop_vert') handleLoopSelect('VERTEX');
+        if (action === 'loop_edge') handleLoopSelect('EDGE');
+        if (action === 'loop_face') handleLoopSelect('FACE');
 
         closePieMenu();
-    }, [selectedIds, sceneGraph, onSelect, setTool, handleFocus, handleModeSelect, closePieMenu]);
+    }, [selectedIds, sceneGraph, onSelect, setTool, setMeshComponentMode, handleFocus, handleModeSelect, closePieMenu]);
 
     return {
         pieMenuState,

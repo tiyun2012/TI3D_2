@@ -1,4 +1,3 @@
-
 import { ComponentStorage } from './ComponentStorage';
 import { MESH_NAMES, MESH_TYPES, ROTATION_ORDER_MAP, ROTATION_ORDER_ZY_MAP, LIGHT_TYPE_MAP, LIGHT_TYPE_NAMES, COMPONENT_MASKS } from '../constants';
 import { SceneGraph } from '../SceneGraph';
@@ -83,6 +82,16 @@ export class SoAEntitySystem {
     deleteEntity(id: string, sceneGraph: SceneGraph) {
         const idx = this.idToIndex.get(id);
         if (idx === undefined) return;
+
+        const mask = this.store.componentMask[idx];
+
+        if (mask & COMPONENT_MASKS.TRANSFORM) this.notify('COMPONENT_REMOVED', id, ComponentType.TRANSFORM);
+        if (mask & COMPONENT_MASKS.MESH) this.notify('COMPONENT_REMOVED', id, ComponentType.MESH);
+        if (mask & COMPONENT_MASKS.LIGHT) this.notify('COMPONENT_REMOVED', id, ComponentType.LIGHT);
+        if (mask & COMPONENT_MASKS.PHYSICS) this.notify('COMPONENT_REMOVED', id, ComponentType.PHYSICS);
+        if (mask & COMPONENT_MASKS.SCRIPT) this.notify('COMPONENT_REMOVED', id, ComponentType.SCRIPT);
+        if (mask & COMPONENT_MASKS.VIRTUAL_PIVOT) this.notify('COMPONENT_REMOVED', id, ComponentType.VIRTUAL_PIVOT);
+        if (mask & COMPONENT_MASKS.PARTICLE_SYSTEM) this.notify('COMPONENT_REMOVED', id, ComponentType.PARTICLE_SYSTEM);
 
         this.notify('ENTITY_DESTROYED', id);
 
@@ -321,7 +330,7 @@ export class SoAEntitySystem {
             set name(v) { store.names[index] = v; },
             get isActive() { return !!store.isActive[index]; },
             set isActive(v) { store.isActive[index] = v ? 1 : 0; },
-    components: {
+            components: {
                 get [ComponentType.TRANSFORM]() { return (store.componentMask[index] & COMPONENT_MASKS.TRANSFORM) ? transformProxy : undefined; },
                 get [ComponentType.MESH]() { return (store.componentMask[index] & COMPONENT_MASKS.MESH) ? meshProxy : undefined; },
                 get [ComponentType.PHYSICS]() { return (store.componentMask[index] & COMPONENT_MASKS.PHYSICS) ? physicsProxy : undefined; },
