@@ -25,6 +25,9 @@ export class ControlRigSystem {
     private _tempQuat = { x: 0, y: 0, z: 0, w: 1 };
     private _tempMat = new Float32Array(16);
     private _invParent = new Float32Array(16);
+    private _tempPos = { x: 0, y: 0, z: 0 };
+    private _tempEuler = { x: 0, y: 0, z: 0 };
+    private _tempScale = { x: 1, y: 1, z: 1 };
 
     update(dt: number) {
         const store = engineInstance.ecs.store;
@@ -126,28 +129,38 @@ export class ControlRigSystem {
                             pose.inputRot[7] = this._tempQuat.w;
                         }
                     }
-                    // If NOT selected, we do nothing. 
-                    // The VM will use the existing `pose.input` (Local Transform).
-                    // Since Node 0 (Parent) changed in Step A, the VM will re-calculate Global for Node 1.
-                    // This creates the "Follow Parent" behavior.
                 }
             }
 
             // C. Execute VM
             instance.vm.execute();
 
-            // D. Sync Output to ECS (Drive Bones)
+            // D. Sync Output to ECS (Drive Bones) - UPDATED: Write Local Transforms!
             instance.entityMap.forEach((poseIdx, entityId) => {
                 const ecsIdx = engineInstance.ecs.idToIndex.get(entityId);
                 if (ecsIdx !== undefined) {
                     const globals = instance.vm.pose.globalMatrices;
                     const offset = poseIdx * 16;
-                    const ecsWorld = engineInstance.ecs.store.worldMatrix;
-                    const ecsOffset = ecsIdx * 16;
+                    const globalMat = globals.subarray(offset, offset + 16);
                     
-                    // Direct Matrix Copy
-                    for(let k=0; k<16; k++) {
-                        ecsWorld[ecsOffset + k] = globals[offset + k];
+                    // We need to set the Local Transform in ECS so that SceneGraph propagation works.
+                    // Local = InvParent * Global
+                    const parentId = engineInstance.sceneGraph.getParentId(entityId);
+                    
+                    if (parentId) {
+                        const parentMat = engineInstance.sceneGraph.getWorldMatrix(parentId);
+                        if (parentMat) {
+                            if (Mat4Utils.invert(parentMat, this._invParent)) {
+                                Mat4Utils.multiply(this._invParent, globalMat, this._tempMat);
+                                this.applyMatrixToECS(ecsIdx, this._tempMat, store);
+                            }
+                        } else {
+                            // If parent has no matrix, treat Global as Local
+                            this.applyMatrixToECS(ecsIdx, globalMat, store);
+                        }
+                    } else {
+                        // No parent, Local = Global
+                        this.applyMatrixToECS(ecsIdx, globalMat, store);
                     }
                     
                     engineInstance.sceneGraph.setDirty(entityId); 
@@ -159,6 +172,63 @@ export class ControlRigSystem {
                 instance.visualizer.update(instance.vm.pose);
             }
         });
+    }
+
+    private applyMatrixToECS(idx: number, m: Float32Array, store: any) {
+        // Decompose matrix m into pos, rot, scale
+        
+        // Position
+        store.posX[idx] = m[12];
+        store.posY[idx] = m[13];
+        store.posZ[idx] = m[14];
+
+        // Scale
+        const sx = Math.sqrt(m[0]*m[0] + m[1]*m[1] + m[2]*m[2]);
+        const sy = Math.sqrt(m[4]*m[4] + m[5]*m[5] + m[6]*m[6]);
+        const sz = Math.sqrt(m[8]*m[8] + m[9]*m[9] + m[10]*m[10]);
+        store.scaleX[idx] = sx || 0.001;
+        store.scaleY[idx] = sy || 0.001;
+        store.scaleZ[idx] = sz || 0.001;
+
+        // Rotation
+        // Normalize for rotation extraction
+        const isx = 1/(sx || 1), isy = 1/(sy || 1), isz = 1/(sz || 1);
+        const m00 = m[0]*isx, m01 = m[1]*isx, m02 = m[2]*isx;
+        const m10 = m[4]*isy, m11 = m[5]*isy, m12 = m[6]*isy;
+        const m20 = m[8]*isz, m21 = m[9]*isz, m22 = m[10]*isz;
+        
+        const trace = m00 + m11 + m22;
+        let S = 0;
+        if (trace > 0) {
+            S = Math.sqrt(trace + 1.0) * 2;
+            this._tempQuat.w = 0.25 * S;
+            this._tempQuat.x = (m21 - m12) / S;
+            this._tempQuat.y = (m02 - m20) / S;
+            this._tempQuat.z = (m10 - m01) / S;
+        } else if ((m00 > m11) && (m00 > m22)) {
+            S = Math.sqrt(1.0 + m00 - m11 - m22) * 2;
+            this._tempQuat.w = (m21 - m12) / S;
+            this._tempQuat.x = 0.25 * S;
+            this._tempQuat.y = (m01 + m10) / S;
+            this._tempQuat.z = (m02 + m20) / S;
+        } else if (m11 > m22) {
+            S = Math.sqrt(1.0 + m11 - m00 - m22) * 2;
+            this._tempQuat.w = (m02 - m20) / S;
+            this._tempQuat.x = (m01 + m10) / S;
+            this._tempQuat.y = 0.25 * S;
+            this._tempQuat.z = (m12 + m21) / S;
+        } else {
+            S = Math.sqrt(1.0 + m22 - m00 - m11) * 2;
+            this._tempQuat.w = (m10 - m01) / S;
+            this._tempQuat.x = (m02 + m20) / S;
+            this._tempQuat.y = (m12 + m21) / S;
+            this._tempQuat.z = 0.25 * S;
+        }
+
+        QuatUtils.toEuler(this._tempQuat, this._tempEuler);
+        store.rotX[idx] = this._tempEuler.x;
+        store.rotY[idx] = this._tempEuler.y;
+        store.rotZ[idx] = this._tempEuler.z;
     }
 
     getOrCreateRigInstance(rootEntityId: string, rigAssetId: string): RigInstance | null {

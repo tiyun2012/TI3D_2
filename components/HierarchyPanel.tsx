@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Entity, ComponentType } from '../types';
@@ -48,11 +47,34 @@ const HierarchyItem: React.FC<{
       }
   };
 
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+      e.dataTransfer.setData('text/plain', entity.id);
+      e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const childId = e.dataTransfer.getData('text/plain');
+      if (!childId) return;
+      if (childId === entity.id) return;
+      let current = sceneGraph.getParentId(entity.id);
+      while (current) {
+          if (current === childId) return;
+          current = sceneGraph.getParentId(current);
+      }
+      sceneGraph.attach(childId, entity.id);
+      engineInstance.notifyUI();
+  };
+
   return (
     <div>
       <div 
+        draggable
         onClick={handleClick}
         onContextMenu={(e) => onContextMenu(e, entity.id)}
+        onDragStart={handleDragStart}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleDrop}
         className={`group flex items-center gap-1.5 py-1 pr-2 cursor-pointer text-xs select-none transition-colors border-l-2
             ${isSelected 
                 ? 'bg-accent/20 border-accent text-white' 
@@ -151,6 +173,14 @@ export const HierarchyPanel: React.FC<HierarchyPanelProps> = ({ entities, sceneG
         <div 
             className="flex items-center gap-2 text-xs text-text-primary px-3 py-1 font-semibold opacity-70 cursor-default"
             onClick={() => onSelect([])}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+                e.preventDefault();
+                const childId = e.dataTransfer.getData('text/plain');
+                if (!childId) return;
+                sceneGraph.attach(childId, null);
+                engineInstance.notifyUI();
+            }}
         >
             <Icon name="Cuboid" size={12} />
             <span>MainScene</span>
