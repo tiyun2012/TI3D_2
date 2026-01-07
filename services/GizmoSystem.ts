@@ -84,6 +84,7 @@ export class GizmoSystem {
                     engineInstance.endVertexDrag();
                 }
                 engineInstance.pushUndoState();
+                engineInstance.notifyUI();
             } else {
                 this.handleDrag(ray, entityId, isComponentMode);
             }
@@ -214,7 +215,7 @@ export class GizmoSystem {
             } else {
                 const target = Vec3Utils.subtract(constrainedHit, this.clickOffset, {x:0,y:0,z:0});
                 this.setWorldPosition(entityId, target);
-                engineInstance.syncTransforms();
+                engineInstance.syncTransforms(false);
             }
         }
     }
